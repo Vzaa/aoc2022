@@ -93,59 +93,43 @@ const Dir = struct {
     }
 };
 
-const State = enum {
-    ParseCmd,
-    ParseLs,
-};
-
 fn parseFs(text: Str) !Dir {
     var line_iter = mem.split(u8, text, "\n");
 
     var root = Dir.init("/", null);
     var pwd = &root;
 
-    var state = State.ParseCmd;
+    while (line_iter.next()) |line| {
+        var iter = mem.split(u8, line, " ");
+        const col = iter.next().?;
 
-    var line = line_iter.next().?;
-    while (true) {
-        switch (state) {
-            State.ParseCmd => {
-                var iter = mem.split(u8, line, " ");
-                _ = iter.next().?;
-                const cmd = iter.next().?;
-                if (mem.eql(u8, cmd, "ls")) {
-                    state = State.ParseLs;
-                } else if (mem.eql(u8, cmd, "cd")) {
-                    const dirname = iter.next().?;
-                    if (mem.eql(u8, dirname, "/")) {
-                        pwd = &root;
-                    } else if (mem.eql(u8, dirname, "..")) {
-                        pwd = pwd.parent.?;
-                    } else {
-                        pwd = try pwd.cd(dirname);
-                    }
+        if (mem.eql(u8, col, "$")) {
+            const cmd = iter.next().?;
+            if (mem.eql(u8, cmd, "ls")) {
+                continue;
+            } else if (mem.eql(u8, cmd, "cd")) {
+                const dirname = iter.next().?;
+                if (mem.eql(u8, dirname, "/")) {
+                    pwd = &root;
+                } else if (mem.eql(u8, dirname, "..")) {
+                    pwd = pwd.parent.?;
                 } else {
-                    unreachable;
+                    pwd = try pwd.cd(dirname);
                 }
-            },
-            State.ParseLs => {
-                var iter = mem.split(u8, line, " ");
-                const col = iter.next().?;
-                if (mem.eql(u8, col, "$")) {
-                    state = State.ParseCmd;
-                    continue;
-                } else if (mem.eql(u8, col, "dir")) {
-                    const dirname = iter.next().?;
-                    const dir = Dir.init(dirname, pwd);
-                    try pwd.addDir(dir);
-                } else {
-                    const name = iter.next().?;
-                    const file = File{ .name = name, .size = try std.fmt.parseInt(usize, col, 10) };
-                    try pwd.addFile(file);
-                }
-            },
+            } else {
+                unreachable;
+            }
+        } else {
+            if (mem.eql(u8, col, "dir")) {
+                const dirname = iter.next().?;
+                const dir = Dir.init(dirname, pwd);
+                try pwd.addDir(dir);
+            } else {
+                const name = iter.next().?;
+                const file = File{ .name = name, .size = try std.fmt.parseInt(usize, col, 10) };
+                try pwd.addFile(file);
+            }
         }
-        line = line_iter.next() orelse break;
     }
     return root;
 }
