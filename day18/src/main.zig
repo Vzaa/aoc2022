@@ -108,6 +108,9 @@ fn isBubble(cubes: *Points, bubbles: *Bubbles, c: Point) !bool {
         .{ x, y, z - 1 },
     };
 
+    var path = Points.init(gpa);
+    defer path.deinit();
+
     for (neigh) |n| {
         if (cubes.contains(n)) {
             continue;
@@ -122,14 +125,21 @@ fn isBubble(cubes: *Points, bubbles: *Bubbles, c: Point) !bool {
             }
         }
 
-        var path = Points.init(gpa);
-        defer path.deinit();
 
-        var b = try isContained(cubes, &path, n);
-        if (!b) {
+        if (!try isContained(cubes, &path, n)) {
+            var kiter = path.keyIterator();
+            while (kiter.next()) |k| {
+                try bubbles.put(k.*, false);
+            }
+
             try bubbles.put(c, false);
             return false;
         }
+    }
+
+    var kiter = path.keyIterator();
+    while (kiter.next()) |k| {
+        try bubbles.put(k.*, true);
     }
 
     // no place to go
@@ -155,9 +165,8 @@ fn closedFaces(cubes: *Points, bubbles: *Bubbles, c: Point) !usize {
     for (neigh) |n| {
         if (cubes.contains(n)) {
             cnt += 1;
-        } else {
-            var b = try isBubble(cubes, bubbles, n);
-            if (b) cnt += 1;
+        } else if (try isBubble(cubes, bubbles, n)) {
+            cnt += 1;
         }
     }
     return cnt;
