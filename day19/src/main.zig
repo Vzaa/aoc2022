@@ -148,22 +148,13 @@ fn search(bp: *Blueprint, comptime min: usize) !usize {
 
     var m: usize = 0;
 
-    var best = State{};
-
     while (frontier.removeOrNull()) |tmp| {
         const cur = tmp;
         var cnt: usize = 0;
 
         const cur_opt = optimistic(&cur, bp, min);
-        if (cur_opt == 0) continue;
-        if (best.geo > 0) {
-            if (cur_opt < best.geo) {
-                continue;
-            }
-        }
-
-        if (cur.geo > best.geo) {
-            best = cur;
+        if (cur_opt == 0 or cur_opt < m) {
+            continue;
         }
 
         if (cur.min == min) {
