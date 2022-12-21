@@ -79,7 +79,7 @@ fn parseMonkes(text: Str) !Monkes {
     return monkes;
 }
 
-fn solve(monkes: *Monkes, name: Str, humn: ?i64) !Pair {
+fn solve(monkes: *Monkes, name: Str, humn: ?i64, div_fail: *bool) !Pair {
     const part2 = if (humn) |_| true else false;
     const monke = monkes.get(name).?;
     if (part2) {
@@ -90,8 +90,8 @@ fn solve(monkes: *Monkes, name: Str, humn: ?i64) !Pair {
         if (mem.eql(u8, "root", monke.name)) {
             switch (monke.op) {
                 Op.Add, Op.Sub, Op.Div, Op.Mul => |*n| {
-                    const a = (try solve(monkes, n[0], humn))[0];
-                    const b = (try solve(monkes, n[1], humn))[0];
+                    const a = (try solve(monkes, n[0], humn, div_fail))[0];
+                    const b = (try solve(monkes, n[1], humn, div_fail))[0];
                     return .{ a, b };
                 },
                 else => unreachable,
@@ -104,19 +104,25 @@ fn solve(monkes: *Monkes, name: Str, humn: ?i64) !Pair {
             return .{ n.*, 0 };
         },
         Op.Add => |*n| {
-            const r = (try solve(monkes, n[0], humn))[0] + (try solve(monkes, n[1], humn))[0];
+            const r = (try solve(monkes, n[0], humn, div_fail))[0] + (try solve(monkes, n[1], humn, div_fail))[0];
             return .{ r, 0 };
         },
         Op.Sub => |*n| {
-            const r = (try solve(monkes, n[0], humn))[0] - (try solve(monkes, n[1], humn))[0];
+            const r = (try solve(monkes, n[0], humn, div_fail))[0] - (try solve(monkes, n[1], humn, div_fail))[0];
             return .{ r, 0 };
         },
         Op.Mul => |*n| {
-            const r = (try solve(monkes, n[0], humn))[0] * (try solve(monkes, n[1], humn))[0];
+            const r = (try solve(monkes, n[0], humn, div_fail))[0] * (try solve(monkes, n[1], humn, div_fail))[0];
             return .{ r, 0 };
         },
         Op.Div => |*n| {
-            const r = @divFloor((try solve(monkes, n[0], humn))[0], (try solve(monkes, n[1], humn))[0]);
+            const a = (try solve(monkes, n[0], humn, div_fail))[0];
+            const b = (try solve(monkes, n[1], humn, div_fail))[0];
+            _ = std.math.divExact(i64, a, b) catch {
+                div_fail.* = true;
+            };
+
+            const r = @divFloor(a, b);
             return .{ r, 0 };
         },
     }
@@ -126,7 +132,9 @@ fn p1(text: Str) !i64 {
     var monkes = try parseMonkes(text);
     defer monkes.deinit();
 
-    return (try solve(&monkes, "root", null))[0];
+    var fail = false;
+
+    return (try solve(&monkes, "root", null, &fail))[0];
 }
 
 fn p2(text: Str) !i64 {
@@ -138,13 +146,21 @@ fn p2(text: Str) !i64 {
 
     var x: i64 = 0;
 
-    // 3555057453229 was the answer but binary search finds 3555057453232
-    // mb there are multiple answers 🤔
     while (true) {
         x = @divFloor(floor + ceil, 2);
-        const res = try solve(&monkes, "root", x);
+        var fail = false;
+        var res = try solve(&monkes, "root", x, &fail);
 
-        if (res[0] == res[1]) {
+        if (res[0] == res[1] and fail) {
+            // close but division errors, yolo go x-=1 which worked for my input
+            while (true) : (x -= 1) {
+                fail = false;
+                res = try solve(&monkes, "root", x, &fail);
+                if (res[0] == res[1] and !fail) {
+                    return x;
+                }
+            }
+        } else if (res[0] == res[1]) {
             return x;
         } else if (res[0] < res[1]) {
             ceil = x - 1;
