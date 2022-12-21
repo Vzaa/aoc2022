@@ -12,6 +12,7 @@ const Str = []const u8;
 var gpa_impl = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_impl.allocator();
 
+const Pair = [2]i64;
 const Names = [2]Str;
 const Monkes = StringHashMap(Monke);
 
@@ -78,21 +79,20 @@ fn parseMonkes(text: Str) !Monkes {
     return monkes;
 }
 
-fn solve(monkes: *Monkes, name: Str, humn: ?i64) !i64 {
+fn solve(monkes: *Monkes, name: Str, humn: ?i64) !Pair {
     const part2 = if (humn) |_| true else false;
     const monke = monkes.get(name).?;
-
     if (part2) {
         if (mem.eql(u8, name, "humn")) {
-            return humn.?;
+            return .{ humn.?, 0 };
         }
 
         if (mem.eql(u8, "root", monke.name)) {
             switch (monke.op) {
                 Op.Add, Op.Sub, Op.Div, Op.Mul => |*n| {
-                    const a = try solve(monkes, n[0], humn);
-                    const b = try solve(monkes, n[1], humn);
-                    return if (a == b) 1 else 0;
+                    const a = (try solve(monkes, n[0], humn))[0];
+                    const b = (try solve(monkes, n[1], humn))[0];
+                    return .{ a, b };
                 },
                 else => unreachable,
             }
@@ -101,19 +101,23 @@ fn solve(monkes: *Monkes, name: Str, humn: ?i64) !i64 {
 
     switch (monke.op) {
         Op.Num => |*n| {
-            return n.*;
+            return .{ n.*, 0 };
         },
         Op.Add => |*n| {
-            return try solve(monkes, n[0], humn) + try solve(monkes, n[1], humn);
+            const r = (try solve(monkes, n[0], humn))[0] + (try solve(monkes, n[1], humn))[0];
+            return .{ r, 0 };
         },
         Op.Sub => |*n| {
-            return try solve(monkes, n[0], humn) - try solve(monkes, n[1], humn);
+            const r = (try solve(monkes, n[0], humn))[0] - (try solve(monkes, n[1], humn))[0];
+            return .{ r, 0 };
         },
         Op.Mul => |*n| {
-            return try solve(monkes, n[0], humn) * try solve(monkes, n[1], humn);
+            const r = (try solve(monkes, n[0], humn))[0] * (try solve(monkes, n[1], humn))[0];
+            return .{ r, 0 };
         },
         Op.Div => |*n| {
-            return @divFloor(try solve(monkes, n[0], humn), try solve(monkes, n[1], humn));
+            const r = @divFloor((try solve(monkes, n[0], humn))[0], (try solve(monkes, n[1], humn))[0]);
+            return .{ r, 0 };
         },
     }
 }
@@ -122,18 +126,30 @@ fn p1(text: Str) !i64 {
     var monkes = try parseMonkes(text);
     defer monkes.deinit();
 
-    return try solve(&monkes, "root", null);
+    return (try solve(&monkes, "root", null))[0];
 }
 
 fn p2(text: Str) !i64 {
     var monkes = try parseMonkes(text);
     defer monkes.deinit();
 
-    // manual binary search lol
-    var x: i64 = 3555057450000;
-    while (true) : (x += 1) {
-        if (try solve(&monkes, "root", x) == 1) {
+    var floor: i64 = 0;
+    var ceil: i64 = 9999999999999999;
+
+    var x: i64 = 0;
+
+    // 3555057453229 was the answer but binary search finds 3555057453232
+    // mb there are multiple answers 🤔
+    while (true) {
+        x = @divFloor(floor + ceil, 2);
+        const res = try solve(&monkes, "root", x);
+
+        if (res[0] == res[1]) {
             return x;
+        } else if (res[0] < res[1]) {
+            ceil = x - 1;
+        } else {
+            floor = x + 1;
         }
     }
 
