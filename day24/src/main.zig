@@ -136,22 +136,8 @@ const PC = struct {
     c: usize,
 };
 
-fn abs(a: i16) i16 {
-    return std.math.absInt(a) catch 0;
-}
-
-fn mDist(a: Point, b: Point) i16 {
-    const x = abs(a[0] - b[0]);
-    const y = abs(a[1] - b[1]);
-    return x + y;
-}
-
-fn compPc(valley: *Valley, a: PC, b: PC) std.math.Order {
-    const cmp = std.math.order(mDist(valley.end(), a.p), mDist(valley.end(), b.p));
-    if (cmp == std.math.Order.eq) {
+fn compPc(_: void, a: PC, b: PC) std.math.Order {
         return std.math.order(a.c, b.c);
-    }
-    return cmp;
 }
 
 fn getNeighbors(p: Point) [5]Point {
@@ -177,20 +163,14 @@ fn getBlizzardMap(list: []const Blizzard) !Map {
     return map;
 }
 
-fn ucs(valley: *Valley, start: Point, tgt: Point) !usize {
-    var frontier = PriorityQueue(PC, *Valley, compPc).init(gpa, valley);
+fn ucs(valley: *Valley, maps: *ArrayList(Map), start: Point, tgt: Point, turn: usize) !usize {
+    var frontier = PriorityQueue(PC, void, compPc).init(gpa, {});
     defer frontier.deinit();
-
-    var maps = ArrayList(Map).init(gpa);
-    defer maps.deinit();
-    defer for (maps.items) |*m| m.deinit();
-
-    try maps.append(try getBlizzardMap(valley.blizzards.items));
 
     var visited = AutoHashMap(PC, void).init(gpa);
     defer visited.deinit();
 
-    try frontier.add(PC{ .p = start, .c = 0 });
+    try frontier.add(PC{ .p = start, .c = turn });
 
     var best: usize = 9999;
 
@@ -202,9 +182,7 @@ fn ucs(valley: *Valley, start: Point, tgt: Point) !usize {
             try maps.append(try getBlizzardMap(valley.blizzards.items));
         }
 
-        const dist = mDist(cur.p, tgt);
-
-        if (@intCast(usize, dist) + cur.c >= best) {
+        if (cur.c >= best) {
             continue;
         }
 
@@ -232,153 +210,7 @@ fn ucs(valley: *Valley, start: Point, tgt: Point) !usize {
         }
     }
 
-    return best;
-}
-
-fn ucs2(valley: *Valley, start: Point, tgt: Point) !usize {
-    var frontier = PriorityQueue(PC, *Valley, compPc).init(gpa, valley);
-    defer frontier.deinit();
-
-    var maps = ArrayList(Map).init(gpa);
-    defer maps.deinit();
-    defer for (maps.items) |*m| m.deinit();
-
-    try maps.append(try getBlizzardMap(valley.blizzards.items));
-
-    var visited = AutoHashMap(PC, void).init(gpa);
-    defer visited.deinit();
-
-    try frontier.add(PC{ .p = start, .c = 0 });
-
-    var best: usize = 9999;
-
-    while (frontier.removeOrNull()) |cur| {
-        var cur_cost = cur.c;
-
-        if (maps.items.len <= cur.c + 1) {
-            valley.moveBlizzards();
-            try maps.append(try getBlizzardMap(valley.blizzards.items));
-        }
-
-        const dist = mDist(cur.p, valley.end());
-
-        if (@intCast(usize, dist) + cur.c >= best) {
-            continue;
-        }
-
-        if (visited.contains(cur)) {
-            continue;
-        }
-        try visited.put(cur, {});
-
-        const map = &maps.items[cur.c + 1];
-
-        if (mem.eql(i16, cur.p[0..], tgt[0..])) {
-            if (cur.c < best) {
-                best = cur.c;
-            }
-        }
-
-        const neighbors = getNeighbors(cur.p);
-
-        for (neighbors) |np| {
-            if (!valley.isReachable(map, np)) {
-                continue;
-            }
-            var cost = cur_cost + 1;
-            try frontier.add(PC{ .p = np, .c = cost });
-        }
-    }
-
-    const c1 = best;
-
-    try frontier.add(PC{ .p = tgt, .c = best });
-    visited.clearAndFree();
-
-    best = 9999;
-    while (frontier.removeOrNull()) |cur| {
-        var cur_cost = cur.c;
-
-        if (maps.items.len <= cur.c + 1) {
-            valley.moveBlizzards();
-            try maps.append(try getBlizzardMap(valley.blizzards.items));
-        }
-
-        const dist = mDist(cur.p, start);
-
-        if (@intCast(usize, dist) + cur.c >= best) {
-            continue;
-        }
-
-        if (visited.contains(cur)) {
-            continue;
-        }
-        try visited.put(cur, {});
-
-        const map = &maps.items[cur.c + 1];
-
-        if (mem.eql(i16, cur.p[0..], start[0..])) {
-            if (cur.c < best) {
-                best = cur.c;
-            }
-        }
-
-        const neighbors = getNeighbors(cur.p);
-
-        for (neighbors) |np| {
-            if (!valley.isReachable(map, np)) {
-                continue;
-            }
-            var cost = cur_cost + 1;
-            try frontier.add(PC{ .p = np, .c = cost });
-        }
-    }
-    const c2 = best - c1;
-
-    try frontier.add(PC{ .p = start, .c = best });
-    visited.clearAndFree();
-
-    best = 9999;
-    while (frontier.removeOrNull()) |cur| {
-        var cur_cost = cur.c;
-
-        if (maps.items.len <= cur.c + 1) {
-            valley.moveBlizzards();
-            try maps.append(try getBlizzardMap(valley.blizzards.items));
-        }
-
-        const dist = mDist(cur.p, tgt);
-
-        if (@intCast(usize, dist) + cur.c >= best) {
-            continue;
-        }
-
-        if (visited.contains(cur)) {
-            continue;
-        }
-        try visited.put(cur, {});
-
-        const map = &maps.items[cur.c + 1];
-
-        if (mem.eql(i16, cur.p[0..], tgt[0..])) {
-            if (cur.c < best) {
-                best = cur.c;
-            }
-        }
-
-        const neighbors = getNeighbors(cur.p);
-
-        for (neighbors) |np| {
-            if (!valley.isReachable(map, np)) {
-                continue;
-            }
-            var cost = cur_cost + 1;
-            try frontier.add(PC{ .p = np, .c = cost });
-        }
-    }
-    const c3 = best - c2 - c1;
-
-    return c1 + c2 + c3;
+    return best - turn;
 }
 
 fn add(a: Point, b: Point) Point {
@@ -389,14 +221,30 @@ fn p1(text: Str) !usize {
     var valley = try Valley.parseMap(text);
     defer valley.deinit();
 
-    return try ucs(&valley, .{ 1, 0 }, .{ valley.w - 2, valley.h - 1 });
+    var maps = ArrayList(Map).init(gpa);
+    defer maps.deinit();
+    defer for (maps.items) |*m| m.deinit();
+
+    try maps.append(try getBlizzardMap(valley.blizzards.items));
+
+    return try ucs(&valley, &maps, .{ 1, 0 }, .{ valley.w - 2, valley.h - 1 }, 0);
 }
 
 fn p2(text: Str) !usize {
     var valley = try Valley.parseMap(text);
     defer valley.deinit();
 
-    return try ucs2(&valley, .{ 1, 0 }, .{ valley.w - 2, valley.h - 1 });
+    var maps = ArrayList(Map).init(gpa);
+    defer maps.deinit();
+    defer for (maps.items) |*m| m.deinit();
+
+    try maps.append(try getBlizzardMap(valley.blizzards.items));
+
+    const c1 = try ucs(&valley, &maps, .{ 1, 0 }, .{ valley.w - 2, valley.h - 1 }, 0);
+    const c2 = try ucs(&valley, &maps, .{ valley.w - 2, valley.h - 1 }, .{ 1, 0 }, c1);
+    const c3 = try ucs(&valley, &maps, .{ 1, 0 }, .{ valley.w - 2, valley.h - 1 }, c1 + c2);
+
+    return c1 + c2 + c3;
 }
 
 pub fn main() anyerror!void {
