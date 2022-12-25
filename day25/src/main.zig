@@ -32,16 +32,55 @@ fn parse(txt: Str) !i64 {
     return val;
 }
 
-fn p1(text: Str) !i64 {
+fn p1(text: Str) !void {
     var iter = mem.split(u8, text, "\n");
     var sum: i64 = 0;
     while (iter.next()) |line| {
         sum += try parse(line);
     }
-    // by hand lol
-    const x = try parse("2011-=2=-1020-1===-1");
+    var val = try gpa.dupe(u8, "22222222222222222222");
+    defer gpa.free(val);
+
+    var digit: usize = 0;
+    while (digit < val.len) : (digit += 1) {
+        if (try parse(val) == sum) break;
+        if (try parse(val) > sum) {
+            val[digit] = '1';
+        }
+
+        if (try parse(val) == sum) break;
+        if (try parse(val) > sum) {
+            val[digit] = '0';
+        } else {
+            val[digit] = '2';
+            continue;
+        }
+
+        if (try parse(val) == sum) break;
+        if (try parse(val) > sum) {
+            val[digit] = '-';
+        } else {
+            val[digit] = '1';
+            continue;
+        }
+
+        if (try parse(val) == sum) break;
+        if (try parse(val) > sum) {
+            val[digit] = '=';
+        } else {
+            val[digit] = '0';
+            continue;
+        }
+
+        if (try parse(val) == sum) break;
+        if (try parse(val) < sum) {
+            val[digit] = '-';
+            continue;
+        }
+    }
+    const x = try parse(val);
     assert(x == sum);
-    return x;
+    print("Part 1: {s}\n", .{val});
 }
 
 pub fn main() anyerror!void {
@@ -49,5 +88,5 @@ pub fn main() anyerror!void {
     const text = @embedFile("input");
     const trimmed = std.mem.trim(u8, text, "\n");
 
-    print("Part 1: {}\n", .{try p1(trimmed)});
+    try p1(trimmed);
 }
